@@ -21,3 +21,6 @@
 
 # Local History for Visual Studio Code
 .history/
+
+# Dont add testdata as it has personal data
+testdata/

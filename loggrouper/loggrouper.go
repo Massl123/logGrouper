@@ -3,7 +3,6 @@ package loggrouper
 import (
 	"bufio"
 	"fmt"
-	"log"
 	"os"
 	"regexp"
 	"sort"
@@ -12,10 +11,10 @@ import (
 )
 
 //NewLogAnalyzer ...
-func NewLogAnalyzer(logfiles []string, logformat, timeformat, interval string) *LogAnalyzer {
+func NewLogAnalyzer(files []string, logformat, timeformat, interval string) *LogAnalyzer {
 	var err error
 	analyzer := &LogAnalyzer{}
-	analyzer.Logfiles = logfiles
+	analyzer.Logfiles = files
 	analyzer.Loglines = make(chan string, 10000)
 	analyzer.TimeSlots = make(map[string]*Timeslot)
 
@@ -31,7 +30,8 @@ func NewLogAnalyzer(logfiles []string, logformat, timeformat, interval string) *
 			}
 		}
 		if !found {
-			log.Fatalf("Did not find match group name: %s\n", neededName)
+			fmt.Fprintf(os.Stderr, "Did not find match group name: %s\n", neededName)
+			os.Exit(1)
 		}
 	}
 
@@ -41,7 +41,8 @@ func NewLogAnalyzer(logfiles []string, logformat, timeformat, interval string) *
 	// Set interval
 	analyzer.TimeInterval, err = time.ParseDuration(interval)
 	if err != nil {
-		log.Panicln(err)
+		fmt.Fprintf(os.Stderr, "Error with interval: %s\n", err)
+		os.Exit(1)
 	}
 
 	return analyzer
@@ -100,9 +101,18 @@ func (analyzer *LogAnalyzer) readFile(logFileName string) {
 	}
 
 	// Read file and write to channel
-	logFile, err := os.Open(logFileName)
-	if err != nil {
-		log.Fatal(err)
+	var logFile *os.File
+	// Special case: "-" means opens stdin
+	if logFileName == "-" {
+		logFile = os.Stdin
+	} else {
+		var err error
+		logFile, err = os.Open(logFileName)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening file: %s\n", err)
+			os.Exit(1)
+		}
+
 	}
 	defer logFile.Close()
 	scnr := bufio.NewScanner(logFile)
@@ -139,7 +149,8 @@ func (analyzer *LogAnalyzer) lineProcessor() {
 		// Parse timestamp from regexp
 		logTime, err := time.Parse(analyzer.Timeformat, result["timestamp"])
 		if err != nil {
-			log.Panicln(err)
+			fmt.Fprintf(os.Stderr, "Error during timestamp parsing: %s\n", err)
+			os.Exit(1)
 		}
 
 		// Adjust time to local timezone so different timezones are merged
