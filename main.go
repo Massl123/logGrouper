@@ -12,8 +12,7 @@ import (
 	TODO
 	- possiblity to align interval to e.g. 00:00
 		- problem is truncate, which alignes to UTC time
-		- other timezones shift this alignment then
-	- limit group output count
+		- other timezones shift this alignment
 
 */
 
