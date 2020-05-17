@@ -25,13 +25,14 @@ type Timeslot struct {
 }
 
 func (ts *Timeslot) addLineToLogGroup(logGroupName string) {
+	ts.Lock()
 	if group, ok := ts.LogGroups[logGroupName]; ok {
+		ts.Unlock()
 		group.Lock()
 		group.Count++
 		group.Unlock()
 	} else {
 		// Group doesn't exists, create new one
-		ts.Lock()
 		group := &LogGroup{}
 		group.Name = logGroupName
 		group.Count++

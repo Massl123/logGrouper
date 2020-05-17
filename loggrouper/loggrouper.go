@@ -6,6 +6,7 @@ import (
 	"os"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 )
@@ -50,7 +51,7 @@ func NewLogAnalyzer(files []string, logformat, timeformat, interval string) *Log
 
 // LogAnalyzer ...
 type LogAnalyzer struct {
-	sync.RWMutex
+	sync.Mutex
 	// WaitGroup for all filereaders
 	wgFileReaders sync.WaitGroup
 	// WaitGroup for all LogLine Processors
@@ -120,7 +121,6 @@ func (analyzer *LogAnalyzer) readFile(logFileName string) {
 		//fmt.Println(scnr.Text())
 		analyzer.Loglines <- scnr.Text()
 	}
-
 	analyzer.wgFileReaders.Done()
 }
 
@@ -165,16 +165,15 @@ func (analyzer *LogAnalyzer) lineProcessor() {
 		analyzer.addLineToTimeSlot(logTime, result["group"])
 
 	}
-
 	analyzer.wgLineProcessors.Done()
 }
 
 // addLineToTimeSlot find the right TimeSlot for given line and creates TimeSlot if needed
 func (analyzer *LogAnalyzer) addLineToTimeSlot(logTime time.Time, logGroupName string) {
-	analyzer.RLock()
+	analyzer.Lock()
 	if slot, ok := analyzer.TimeSlots[logTime.String()]; ok {
 		// Slot exists, increment counter and match to LogGroup
-		analyzer.RUnlock()
+		analyzer.Unlock()
 		slot.Lock()
 		slot.Count++
 		slot.Unlock()
@@ -182,8 +181,6 @@ func (analyzer *LogAnalyzer) addLineToTimeSlot(logTime time.Time, logGroupName s
 
 	} else {
 		// Slot doesn't exists, create new one and then add logline
-		analyzer.RUnlock()
-		analyzer.Lock()
 		slot := NewTimeslot(logTime)
 		analyzer.TimeSlots[logTime.String()] = slot
 		analyzer.Unlock()
@@ -195,9 +192,9 @@ func (analyzer *LogAnalyzer) addLineToTimeSlot(logTime time.Time, logGroupName s
 }
 
 // Print prints the result to stdout
-func (analyzer *LogAnalyzer) Print(withUnmatchedLines bool) {
-	analyzer.RLock()
-	defer analyzer.RUnlock()
+func (analyzer *LogAnalyzer) Print(logGroupLimit int, withUnmatchedLines bool) {
+	analyzer.Lock()
+	defer analyzer.Unlock()
 
 	// Sorting by string is not the most accurate but works for now
 	var sortedTimeSlotNames []string
@@ -233,17 +230,20 @@ func (analyzer *LogAnalyzer) Print(withUnmatchedLines bool) {
 			sortedLogGroups = append(sortedLogGroups, group)
 		}
 
-		sort.Slice(sortedLogGroups, func(i, j int) bool { return sortedLogGroups[i].Count > sortedLogGroups[j].Count })
+		sort.SliceStable(sortedLogGroups, func(i, j int) bool { return sortedLogGroups[i].Count > sortedLogGroups[j].Count })
 
 		// Print LogGroups
-		for _, group := range sortedLogGroups {
+		for i, group := range sortedLogGroups {
+			if i > logGroupLimit-1 {
+				break
+			}
 			fmt.Printf("%10s%-40s%10d\n", "", group.Name, group.Count)
 		}
 	}
 
 	fmt.Printf("\n\n")
 	fmt.Printf("Interval: %s, Output timezone: %s, Unmatched Lines: %d\n", analyzer.TimeInterval, currentDay.Format("-0700 MST"), len(analyzer.UnmatchedLines))
-	fmt.Printf("Files: %s\n", analyzer.Logfiles)
+	fmt.Printf("Files: %s\n", strings.Join(analyzer.Logfiles, ", "))
 
 	if withUnmatchedLines {
 		fmt.Println("Unmatched lines:")

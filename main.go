@@ -11,6 +11,10 @@ import (
 /*
 	TODO
 	- possiblity to align interval to e.g. 00:00
+		- problem is truncate, which alignes to UTC time
+		- other timezones shift this alignment then
+	- limit group output count
+
 */
 
 func main() {
@@ -28,8 +32,9 @@ func main() {
 	}
 
 	fVerbose := flag.BoolP("verbose", "v", false, "Verbose output (show unparsed lines)")
+	fGroupLimit := flag.IntP("limit", "l", 20, "Limit output per timeslot.")
 	fInterval := flag.StringP("interval", "i", "15m", "Interval to group by. Format like 15m (Units supported: ns, us (or µs), ms, s, m, h).")
-	fLogFormat := flag.StringP("format", "f", `^.+ .+ .+ \[(?P<timestamp>.+)\] ".+ (?P<group>/.*?[/?\ ]).*" .+$`, "LogFormat regexp in GoLang Format. Match group \"timestamp\" and \"group\" have to exist. See https://golang.org/pkg/regexp/syntax/")
+	fLogFormat := flag.StringP("format", "f", `^.*\[(?P<timestamp>.+)\].*"(?P<group>.+ [/\*].*?[/?\ ]).*".*$`, "LogFormat regexp in GoLang Format. Match group \"timestamp\" and \"group\" have to exist. See https://golang.org/pkg/regexp/syntax/")
 	fTimeFormat := flag.StringP("timeFormat", "t", "2/Jan/2006:15:04:05 -0700", "Time format for \"timestamp\" match group. Given in GoLang format, see https://golang.org/pkg/time/#Parse")
 
 	flag.Parse()
@@ -44,5 +49,5 @@ func main() {
 	// https://golang.org/pkg/regexp/syntax/
 	analyzer := loggrouper.NewLogAnalyzer(fArgs, *fLogFormat, *fTimeFormat, *fInterval)
 	analyzer.Analyze()
-	analyzer.Print(*fVerbose)
+	analyzer.Print(*fGroupLimit, *fVerbose)
 }
