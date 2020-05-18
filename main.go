@@ -8,14 +8,6 @@ import (
 	flag "github.com/spf13/pflag"
 )
 
-/*
-	TODO
-	- possiblity to align interval to e.g. 00:00
-		- problem is truncate, which alignes to UTC time
-		- other timezones shift this alignment
-
-*/
-
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n")
@@ -26,6 +18,12 @@ func main() {
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Copyright (c) 2020 Marcel Freundl <github.com/Massl123>\n")
 		fmt.Fprintf(os.Stderr, "\n")
+		fmt.Fprintf(os.Stderr, "Profiles:\n")
+		fmt.Fprintf(os.Stderr, "%-20s %-100s %-50s\n", "Name", "Log format", "Time format")
+		for _, profile := range loggrouper.Profiles {
+			fmt.Fprintf(os.Stderr, "%-20s %-100s %-50s\n", profile.Name, profile.LogFormat, profile.TimeFormat)
+		}
+		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
 		flag.PrintDefaults()
 	}
@@ -33,8 +31,9 @@ func main() {
 	fVerbose := flag.BoolP("verbose", "v", false, "Verbose output (show unparsed lines)")
 	fGroupLimit := flag.IntP("limit", "l", 20, "Limit output per timeslot.")
 	fInterval := flag.StringP("interval", "i", "15m", "Interval to group by. Format like 15m (Units supported: ns, us (or µs), ms, s, m, h).")
-	fLogFormat := flag.StringP("format", "f", `^.*\[(?P<timestamp>.+)\].*"(?P<group>.+ [/\*].*?[/?\ ]).*".*$`, "LogFormat regexp in GoLang Format. Match group \"timestamp\" and \"group\" have to exist. See https://golang.org/pkg/regexp/syntax/")
-	fTimeFormat := flag.StringP("timeFormat", "t", "2/Jan/2006:15:04:05 -0700", "Time format for \"timestamp\" match group. Given in GoLang format, see https://golang.org/pkg/time/#Parse")
+	fProfile := flag.StringP("profile", "p", "apacheAccessLog", "Profile to use. Profile loads LogFormat and TimeFormat. Use LogFormat and TimeFormat parameters to override.")
+	fLogFormat := flag.StringP("format", "f", "", "LogFormat regexp in GoLang Format. Match group \"timestamp\" and \"group\" have to exist. See https://golang.org/pkg/regexp/syntax/.")
+	fTimeFormat := flag.StringP("timeFormat", "t", "", "Time format for \"timestamp\" match group. Given in GoLang format, see https://golang.org/pkg/time/#Parse.")
 
 	flag.Parse()
 
@@ -45,8 +44,19 @@ func main() {
 		fArgs = []string{"-"}
 	}
 
+	// Load profile
+	profile := loggrouper.Profiles[*fProfile]
+
+	// Override profile values with custom values if specified
+	if *fLogFormat != "" {
+		profile.LogFormat = *fLogFormat
+	}
+	if *fTimeFormat != "" {
+		profile.LogFormat = *fTimeFormat
+	}
+
 	// https://golang.org/pkg/regexp/syntax/
-	analyzer := loggrouper.NewLogAnalyzer(fArgs, *fLogFormat, *fTimeFormat, *fInterval)
+	analyzer := loggrouper.NewLogAnalyzer(fArgs, profile.LogFormat, profile.TimeFormat, *fInterval)
 	analyzer.Analyze()
 	analyzer.Print(*fGroupLimit, *fVerbose)
 }
