@@ -3,19 +3,18 @@ package loggrouper
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"regexp"
 	"sort"
-	"strings"
 	"sync"
 	"time"
 )
 
-//NewLogAnalyzer ...
-func NewLogAnalyzer(files []string, logformat, timeformat, interval string) *LogAnalyzer {
+//NewLogGrouper ...
+func NewLogGrouper(logformat, timeformat, interval string) *LogGrouper {
 	var err error
-	analyzer := &LogAnalyzer{}
-	analyzer.Logfiles = files
+	analyzer := &LogGrouper{}
 	analyzer.Loglines = make(chan string, 10000)
 	analyzer.TimeSlots = make(map[string]*Timeslot)
 
@@ -49,16 +48,14 @@ func NewLogAnalyzer(files []string, logformat, timeformat, interval string) *Log
 	return analyzer
 }
 
-// LogAnalyzer ...
-type LogAnalyzer struct {
+// LogGrouper ...
+type LogGrouper struct {
 	sync.Mutex
 	// WaitGroup for all filereaders
 	wgFileReaders sync.WaitGroup
 	// WaitGroup for all LogLine Processors
 	wgLineProcessors sync.WaitGroup
 
-	// Path to logfile
-	Logfiles []string
 	// Contains all raw loglines which are sorted into the right TimeSlots
 	Loglines chan string
 	// Regex for the format of the loglines
@@ -76,14 +73,13 @@ type LogAnalyzer struct {
 	UnmatchedLines []string
 }
 
-// Analyze ...
-// Blocks until finished
-func (analyzer *LogAnalyzer) Analyze() {
-
-	for _, logfile := range analyzer.Logfiles {
+// Analyze is the generic Analyzer using io.Reader
+func (analyzer *LogGrouper) Analyze(readers []io.Reader) {
+	// Start readers for given io.Readers
+	for _, reader := range readers {
 
 		analyzer.wgFileReaders.Add(1)
-		go analyzer.readFile(logfile)
+		go analyzer.read(reader)
 	}
 
 	// Wait for all FileReaders to finish before closing channel
@@ -94,29 +90,37 @@ func (analyzer *LogAnalyzer) Analyze() {
 	analyzer.wgLineProcessors.Wait()
 }
 
-func (analyzer *LogAnalyzer) readFile(logFileName string) {
+// AnalyzeFiles wraps Analyze for easy file reading
+func (analyzer *LogGrouper) AnalyzeFiles(logFilePaths []string) {
+	var readers []io.Reader
+	for _, logFilePath := range logFilePaths {
+		var logFile *os.File
+		var err error
+		if logFilePath == "-" {
+			logFile = os.Stdin
+		} else {
+			logFile, err = os.Open(logFilePath)
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error opening file: %s\n", err)
+			os.Exit(1)
+		}
+		defer logFile.Close()
+		readers = append(readers, logFile)
+	}
+
+	analyzer.Analyze(readers)
+}
+
+// read spawns the line processors and continues to read from io.Reader until it is empty
+func (analyzer *LogGrouper) read(reader io.Reader) {
 	// Start processors
 	for i := 0; i < 10; i++ {
 		analyzer.wgLineProcessors.Add(1)
 		go analyzer.lineProcessor()
 	}
 
-	// Read file and write to channel
-	var logFile *os.File
-	// Special case: "-" means opens stdin
-	if logFileName == "-" {
-		logFile = os.Stdin
-	} else {
-		var err error
-		logFile, err = os.Open(logFileName)
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error opening file: %s\n", err)
-			os.Exit(1)
-		}
-
-	}
-	defer logFile.Close()
-	scnr := bufio.NewScanner(logFile)
+	scnr := bufio.NewScanner(reader)
 	for scnr.Scan() {
 		//fmt.Println(scnr.Text())
 		analyzer.Loglines <- scnr.Text()
@@ -125,7 +129,8 @@ func (analyzer *LogAnalyzer) readFile(logFileName string) {
 }
 
 // lineProcessor reads lines from analyzer.Loglines and parses them
-func (analyzer *LogAnalyzer) lineProcessor() {
+// it calls addLineToTimeSlot for grouping
+func (analyzer *LogGrouper) lineProcessor() {
 	for line := range analyzer.Loglines {
 		// Parse logline to regexp match
 		match := analyzer.Logformat.FindStringSubmatch(line)
@@ -169,7 +174,7 @@ func (analyzer *LogAnalyzer) lineProcessor() {
 }
 
 // addLineToTimeSlot find the right TimeSlot for given line and creates TimeSlot if needed
-func (analyzer *LogAnalyzer) addLineToTimeSlot(logTime time.Time, logGroupName string) {
+func (analyzer *LogGrouper) addLineToTimeSlot(logTime time.Time, logGroupName string) {
 	analyzer.Lock()
 	if slot, ok := analyzer.TimeSlots[logTime.String()]; ok {
 		// Slot exists, increment counter and match to LogGroup
@@ -192,7 +197,7 @@ func (analyzer *LogAnalyzer) addLineToTimeSlot(logTime time.Time, logGroupName s
 }
 
 // Print prints the result to stdout
-func (analyzer *LogAnalyzer) Print(logGroupLimit int, withUnmatchedLines bool) {
+func (analyzer *LogGrouper) Print(logGroupLimit int, withUnmatchedLines bool) {
 	analyzer.Lock()
 	defer analyzer.Unlock()
 
@@ -243,7 +248,6 @@ func (analyzer *LogAnalyzer) Print(logGroupLimit int, withUnmatchedLines bool) {
 
 	fmt.Printf("\n\n")
 	fmt.Printf("Interval: %s, Output timezone: %s, Unmatched Lines: %d\n", analyzer.TimeInterval, currentDay.Format("-0700 MST"), len(analyzer.UnmatchedLines))
-	fmt.Printf("Files: %s\n", strings.Join(analyzer.Logfiles, ", "))
 
 	if withUnmatchedLines {
 		fmt.Println("Unmatched lines:")

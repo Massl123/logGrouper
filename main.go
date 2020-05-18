@@ -56,7 +56,7 @@ func main() {
 	}
 
 	// https://golang.org/pkg/regexp/syntax/
-	analyzer := loggrouper.NewLogAnalyzer(fArgs, profile.LogFormat, profile.TimeFormat, *fInterval)
-	analyzer.Analyze()
+	analyzer := loggrouper.NewLogGrouper(profile.LogFormat, profile.TimeFormat, *fInterval)
+	analyzer.AnalyzeFiles(fArgs)
 	analyzer.Print(*fGroupLimit, *fVerbose)
 }
