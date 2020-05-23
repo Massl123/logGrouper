@@ -5,26 +5,26 @@ import (
 	"time"
 )
 
-// NewTimeslot ...
-func NewTimeslot(startTime time.Time) *Timeslot {
-	ts := &Timeslot{}
+// newTimeslot creates a initialized timeSlot object
+func newTimeslot(startTime time.Time) *timeSlot {
+	ts := &timeSlot{}
 	ts.StartTime = startTime
-	ts.LogGroups = make(map[string]*LogGroup)
+	ts.LogGroups = make(map[string]*logGroup)
 
 	return ts
 }
 
-// Timeslot ...
-type Timeslot struct {
+// timeSlot is used for grouping on time
+type timeSlot struct {
 	sync.Mutex
 	// Timeslot datetime
 	StartTime time.Time
 	Count     uint
 
-	LogGroups map[string]*LogGroup
+	LogGroups map[string]*logGroup
 }
 
-func (ts *Timeslot) addLineToLogGroup(logGroupName string) {
+func (ts *timeSlot) addLineToLogGroup(logGroupName string) {
 	ts.Lock()
 	if group, ok := ts.LogGroups[logGroupName]; ok {
 		ts.Unlock()
@@ -33,7 +33,7 @@ func (ts *Timeslot) addLineToLogGroup(logGroupName string) {
 		group.Unlock()
 	} else {
 		// Group doesn't exists, create new one
-		group := &LogGroup{}
+		group := &logGroup{}
 		group.Name = logGroupName
 		group.Count++
 		ts.LogGroups[logGroupName] = group
@@ -41,8 +41,8 @@ func (ts *Timeslot) addLineToLogGroup(logGroupName string) {
 	}
 }
 
-// LogGroup ...
-type LogGroup struct {
+// logGroup is the group in a timeSlot group
+type logGroup struct {
 	sync.Mutex
 	Name  string
 	Count uint

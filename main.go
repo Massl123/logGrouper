@@ -19,9 +19,9 @@ func main() {
 		fmt.Fprintf(os.Stderr, "Copyright (c) 2020 Marcel Freundl <github.com/Massl123>\n")
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Profiles:\n")
-		fmt.Fprintf(os.Stderr, "%-20s %-100s %-50s\n", "Name", "Log format", "Time format")
+		fmt.Fprintf(os.Stderr, "%-40s %-100s %-25s\n", "Name", "Log format", "Time format")
 		for _, profile := range loggrouper.Profiles {
-			fmt.Fprintf(os.Stderr, "%-20s %-100s %-50s\n", profile.Name, profile.LogFormat, profile.TimeFormat)
+			fmt.Fprintf(os.Stderr, "%-40s %-100s %-25s\n", profile.Name, profile.LogFormat, profile.TimeFormat)
 		}
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Options:\n")
@@ -31,7 +31,7 @@ func main() {
 	fVerbose := flag.BoolP("verbose", "v", false, "Verbose output (show unparsed lines)")
 	fGroupLimit := flag.IntP("limit", "l", 20, "Limit output per timeslot.")
 	fInterval := flag.StringP("interval", "i", "15m", "Interval to group by. Format like 15m (Units supported: ns, us (or µs), ms, s, m, h).")
-	fProfile := flag.StringP("profile", "p", "apacheAccessLog", "Profile to use. Profile loads LogFormat and TimeFormat. Use LogFormat and TimeFormat parameters to override.")
+	fProfile := flag.StringP("profile", "p", "apacheAccessLog-full", "Profile to use. Profile loads LogFormat and TimeFormat. Use LogFormat and TimeFormat parameters to override.")
 	fLogFormat := flag.StringP("format", "f", "", "LogFormat regexp in GoLang Format. Match group \"timestamp\" and \"group\" have to exist. See https://golang.org/pkg/regexp/syntax/.")
 	fTimeFormat := flag.StringP("timeFormat", "t", "", "Time format for \"timestamp\" match group. Given in GoLang format, see https://golang.org/pkg/time/#Parse.")
 

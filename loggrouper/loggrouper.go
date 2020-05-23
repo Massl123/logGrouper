@@ -11,32 +11,35 @@ import (
 	"time"
 )
 
-//NewLogGrouper ...
+// NewLogGrouper creates LogGrouper object for usage
+// logformat is the regexp for matching the lines. It has to include match groups "timestamp" and "group"
+// timeformat is the golang time format for time grouping
+// interval is the interval to group by
 func NewLogGrouper(logformat, timeformat, interval string) *LogGrouper {
 	var err error
 	analyzer := &LogGrouper{}
 	analyzer.Loglines = make(chan string, 10000)
-	analyzer.TimeSlots = make(map[string]*Timeslot)
+	analyzer.TimeSlots = make(map[string]*timeSlot)
 
 	// Set up Logformat
-	analyzer.Logformat = regexp.MustCompile(logformat)
+	analyzer.LogFormat = regexp.MustCompile(logformat)
 	// Ensure needed match names are set
 	var neededSubexpNames = [...]string{"timestamp", "group"}
 	for _, neededName := range neededSubexpNames {
 		found := false
-		for _, name := range analyzer.Logformat.SubexpNames() {
+		for _, name := range analyzer.LogFormat.SubexpNames() {
 			if name == neededName {
 				found = true
 			}
 		}
 		if !found {
-			fmt.Fprintf(os.Stderr, "Did not find match group name: %s\n", neededName)
+			fmt.Fprintf(os.Stderr, "Did not find match group name: %s\nRegex has to look like this: %s\n", neededName, profileApacheAccessLogFull.LogFormat)
 			os.Exit(1)
 		}
 	}
 
 	// Set timeformat
-	analyzer.Timeformat = timeformat
+	analyzer.TimeFormat = timeformat
 
 	// Set interval
 	analyzer.TimeInterval, err = time.ParseDuration(interval)
@@ -48,7 +51,7 @@ func NewLogGrouper(logformat, timeformat, interval string) *LogGrouper {
 	return analyzer
 }
 
-// LogGrouper ...
+// LogGrouper groups logs (or any string with timestamp and some text) by time and a common string
 type LogGrouper struct {
 	sync.Mutex
 	// WaitGroup for all filereaders
@@ -56,19 +59,19 @@ type LogGrouper struct {
 	// WaitGroup for all LogLine Processors
 	wgLineProcessors sync.WaitGroup
 
-	// Contains all raw loglines which are sorted into the right TimeSlots
+	// Contains all raw Loglines which are sorted into the right TimeSlots
 	Loglines chan string
 	// Regex for the format of the loglines
-	Logformat *regexp.Regexp
-	// Timeformat in GoFormat for "timestamp" loglines match group
+	LogFormat *regexp.Regexp
+	// TimeFormat in GoFormat for "timestamp" loglines match group
 	// See https://golang.org/pkg/time/#Parse
-	Timeformat string
+	TimeFormat string
 
 	// Time Interval used for grouping to TimeSlots
 	// See https://golang.org/pkg/time/#ParseDuration
 	TimeInterval time.Duration
 	// Contains all TimeSlots which are found
-	TimeSlots map[string]*Timeslot
+	TimeSlots map[string]*timeSlot
 
 	UnmatchedLines []string
 }
@@ -90,7 +93,7 @@ func (analyzer *LogGrouper) Analyze(readers []io.Reader) {
 	analyzer.wgLineProcessors.Wait()
 }
 
-// AnalyzeFiles wraps Analyze for easy file reading
+// AnalyzeFiles wraps Analyze for easily using files
 func (analyzer *LogGrouper) AnalyzeFiles(logFilePaths []string) {
 	var readers []io.Reader
 	for _, logFilePath := range logFilePaths {
@@ -112,7 +115,7 @@ func (analyzer *LogGrouper) AnalyzeFiles(logFilePaths []string) {
 	analyzer.Analyze(readers)
 }
 
-// read spawns the line processors and continues to read from io.Reader until it is empty
+// read creates the line processors and continues to read from io.Reader until it is empty
 func (analyzer *LogGrouper) read(reader io.Reader) {
 	// Start processors
 	for i := 0; i < 10; i++ {
@@ -133,7 +136,7 @@ func (analyzer *LogGrouper) read(reader io.Reader) {
 func (analyzer *LogGrouper) lineProcessor() {
 	for line := range analyzer.Loglines {
 		// Parse logline to regexp match
-		match := analyzer.Logformat.FindStringSubmatch(line)
+		match := analyzer.LogFormat.FindStringSubmatch(line)
 		result := make(map[string]string)
 
 		// If no match skip this line and increment UnmatchedLines counter
@@ -144,7 +147,7 @@ func (analyzer *LogGrouper) lineProcessor() {
 			continue
 		}
 
-		for i, name := range analyzer.Logformat.SubexpNames() {
+		for i, name := range analyzer.LogFormat.SubexpNames() {
 			// index 0 is the full match, ignore that and ensure that name is set
 			if i != 0 && name != "" {
 				result[name] = match[i]
@@ -152,9 +155,9 @@ func (analyzer *LogGrouper) lineProcessor() {
 		}
 
 		// Parse timestamp from regexp
-		logTime, err := time.Parse(analyzer.Timeformat, result["timestamp"])
+		logTime, err := time.Parse(analyzer.TimeFormat, result["timestamp"])
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "Error during timestamp parsing: %s\n", err)
+			fmt.Fprintf(os.Stderr, "Error during timestamp parsing: %s\nwith line\n%s\n", err, line)
 			os.Exit(1)
 		}
 
@@ -186,7 +189,7 @@ func (analyzer *LogGrouper) addLineToTimeSlot(logTime time.Time, logGroupName st
 
 	} else {
 		// Slot doesn't exists, create new one and then add logline
-		slot := NewTimeslot(logTime)
+		slot := newTimeslot(logTime)
 		analyzer.TimeSlots[logTime.String()] = slot
 		analyzer.Unlock()
 
@@ -196,7 +199,7 @@ func (analyzer *LogGrouper) addLineToTimeSlot(logTime time.Time, logGroupName st
 	}
 }
 
-// Print prints the result to stdout
+// Print the result nicely formatted to stdout
 func (analyzer *LogGrouper) Print(logGroupLimit int, withUnmatchedLines bool) {
 	analyzer.Lock()
 	defer analyzer.Unlock()
@@ -227,10 +230,10 @@ func (analyzer *LogGrouper) Print(logGroupLimit int, withUnmatchedLines bool) {
 		}
 
 		// Print time and count in this TimeSlot
-		fmt.Printf("%15s - %-15s%27d\n", slot.StartTime.Format("15:04:05"), slot.StartTime.Add(analyzer.TimeInterval).Format("15:04:05"), slot.Count)
+		fmt.Printf("%15s - %-15s%87d\n", slot.StartTime.Format("15:04:05"), slot.StartTime.Add(analyzer.TimeInterval).Format("15:04:05"), slot.Count)
 
 		// Sort LogGroups
-		var sortedLogGroups []*LogGroup
+		var sortedLogGroups []*logGroup
 		for _, group := range slot.LogGroups {
 			sortedLogGroups = append(sortedLogGroups, group)
 		}
@@ -242,7 +245,7 @@ func (analyzer *LogGrouper) Print(logGroupLimit int, withUnmatchedLines bool) {
 			if i > logGroupLimit-1 {
 				break
 			}
-			fmt.Printf("%10s%-40s%10d\n", "", group.Name, group.Count)
+			fmt.Printf("%10s%-100s%10d\n", "", group.Name, group.Count)
 		}
 	}
 
