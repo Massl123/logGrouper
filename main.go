@@ -11,8 +11,8 @@ import (
 func main() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, "\n")
-		fmt.Fprintf(os.Stderr, "Usage: logGrouper [options] [file1 file2 file...]\n")
-		fmt.Fprintf(os.Stderr, "Use file name \"-\" or give no file name to read from stdin.\n")
+		fmt.Fprintf(os.Stderr, "Usage: logGrouper [options] file1 [file2 file...]\n")
+		fmt.Fprintf(os.Stderr, "Use file name \"-\" to read from stdin.\n")
 		fmt.Fprintf(os.Stderr, "\n")
 		fmt.Fprintf(os.Stderr, "Group lines in log by time and occurance.\n")
 		fmt.Fprintf(os.Stderr, "\n")
@@ -39,9 +39,10 @@ func main() {
 
 	fArgs := flag.Args()
 
-	// Read from stdin if no file is given
+	// Show error if no files are given
 	if len(fArgs) == 0 {
-		fArgs = []string{"-"}
+		flag.Usage()
+		os.Exit(0)
 	}
 
 	// Load profile
