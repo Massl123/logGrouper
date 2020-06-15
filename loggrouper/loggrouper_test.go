@@ -34,8 +34,8 @@ func TestApacheLogParsing(t *testing.T) {
 			analyzer.Analyze([]io.Reader{strings.NewReader(logLine)})
 
 			// Adjust timeGroup to local timezone
-			tg, _ := time.Parse("2006-01-02 15:04:05 -0700 MST", timeGroup)
-			timeGroup = tg.Format("2006-01-02 15:04:05 -0700 MST")
+			tg, _ := time.Parse("2006-01-02 15:04:05 -0700", timeGroup)
+			timeGroup = tg.Local().String()
 
 			// Check if unparsed lines is zero
 			if len(analyzer.UnmatchedLines) != 0 {
@@ -64,21 +64,20 @@ func TestApacheLogParsing(t *testing.T) {
 
 	// As all logLines timezones are converted to local timezone the given group time may change
 	// For the tests to work in different timezones add this string to every timestamp string
-	tz := time.Now().Format("-0700 MST")
 
 	// GET and single slash
-	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /apache_pb.gif")
-	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /apache_pb.gif ")
+	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /apache_pb.gif")
+	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /apache_pb.gif ")
 
 	// POST and single slash
-	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "POST /apache_pb.gif HTTP/2.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "POST /apache_pb.gif")
-	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "POST /apache_pb.gif HTTP/2.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "POST /apache_pb.gif ")
+	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "POST /apache_pb.gif HTTP/2.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "POST /apache_pb.gif")
+	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "POST /apache_pb.gif HTTP/2.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "POST /apache_pb.gif ")
 
 	// GET and two slashes
-	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /test123/apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /test123/apache_pb.gif")
-	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /test123/apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /test123/")
+	do("apacheAccessLog-full", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /test123/apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /test123/apache_pb.gif")
+	do("apacheAccessLog-first-group", "15m", `127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /test123/apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /test123/")
 
 	// IPv6
-	do("apacheAccessLog-full", "15m", `fe80:880:197d:0:250:fcfb:fe23:3279 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /apache_pb.gif")
-	do("apacheAccessLog-first-group", "15m", `fe80:880:197d:0:250:fcfb:fe23:3279 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 22:45:00 "+tz, "GET /apache_pb.gif ")
+	do("apacheAccessLog-full", "15m", `fe80:880:197d:0:250:fcfb:fe23:3279 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /apache_pb.gif")
+	do("apacheAccessLog-first-group", "15m", `fe80:880:197d:0:250:fcfb:fe23:3279 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326 "http://www.example.com/start.html" "Mozilla/4.08 [en] (Win98; I ;Nav)"`, "2000-10-10 13:45:00 -0700", "GET /apache_pb.gif ")
 }
